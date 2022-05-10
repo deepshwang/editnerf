@@ -5,9 +5,13 @@ import numpy as np
 from numpy import sin, cos
 from PIL import Image
 from torchvision import transforms, utils
+import sys
 
-basedir = 'data/dosovitskiy_chairs/rendered_chairs'
-todir = 'data/dosovitskiy_chairs/'
+args = sys.argv[1:]
+basedir = args[0] + '/rendered_chairs'
+todir = args[0] + '/'
+#basedir = 'data/dosovitskiy_chairs/rendered_chairs'
+#todir = 'data/dosovitskiy_chairs/'
 FOCAL = 1.93699312 * 4 / 6  # Additional * 4 / 6 factor from resizing 600 -> 400
 
 # Resize and crop so that the chair takes up most of the image

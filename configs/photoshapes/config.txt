@@ -1,6 +1,6 @@
 expname = photoshapes
-basedir = ./logs/
-datadir = data/photoshapes
+basedir = model/cnerf/logs/
+datadir = /home/nas2_userF/sungwonhwang/ws/data/photoshapes
 
 style_dim = 64
 embed_dim = 128
@@ -12,7 +12,7 @@ lrate_decay = 500
 
 N_rand = 1024
 N_samples = 64
-N_importance = 128
+N_importance = 128 
 
 precrop_iters = 500
 precrop_frac = 0.5
@@ -26,3 +26,5 @@ N_instances = 100
 W_bottleneck = 8
 
 i_print = 100
+
+ds_ratio = 2

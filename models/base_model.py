@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch
 torch.autograd.set_detect_anomaly(True)
 
+import ipdb
 
 class StyleMLP(nn.Module):
     def __init__(self, style_dim=8, embed_dim=128, style_depth=1):
@@ -22,7 +23,9 @@ class StyleMLP(nn.Module):
 
 
 class NeRF(nn.Module):
-    def __init__(self, D_mean=4, W_mean=256, D_instance=4, W_instance=256, D_fusion=4, W_fusion=256, D_sigma=1, W_sigma=256, D_rgb=2, W_rgb=128, W_bottleneck=8, input_ch=3, input_ch_views=3, output_ch=4, style_dim=64, embed_dim=128, style_depth=1, shared_shape=True, use_styles=True, separate_codes=True, use_viewdirs=True, **kwargs):
+    def __init__(self, D_mean=4, W_mean=256, D_instance=4, W_instance=256, D_fusion=4, W_fusion=256, D_sigma=1, W_sigma=256, D_rgb=2, W_rgb=128, W_bottleneck=8, 
+                input_ch=3, input_ch_views=3, output_ch=4, style_dim=64, embed_dim=128, style_depth=1, shared_shape=True, use_styles=True, separate_codes=True, 
+                use_viewdirs=True , **kwargs):
         super(NeRF, self).__init__()
 
         self.input_ch = input_ch
@@ -33,7 +36,6 @@ class NeRF(nn.Module):
         self.shared_shape = shared_shape
         self.get_cached = None  # Updated by render_path to get cache
         self.activation = F.relu
-
         if shared_shape:
             self.mean_network = nn.Sequential(*[nn.Linear(input_ch, W_mean)], *[nn.Sequential(nn.ReLU(), nn.Linear(W_mean, W_mean)) for i in range(D_mean - 2)])
             self.mean_output = nn.Sequential(nn.ReLU(), nn.Linear(W_mean, W_instance))
@@ -43,7 +45,7 @@ class NeRF(nn.Module):
 
         self.style_dim = style_dim
         self.embed_size = style_dim if embed_dim < 0 else embed_dim
-
+ 
         pts_inp_dim = (input_ch + self.embed_size) if use_styles else input_ch
         view_inp_dim = (input_ch_views + self.embed_size) if use_styles else input_ch_views
 
@@ -71,13 +73,28 @@ class NeRF(nn.Module):
 
         # self.num_parameters()
 
-    def forward(self, x, styles, alpha=None, feature=None):
+    def forward(self, x, styles, maskMLP=None, alpha=None, feature=None, mask=None, mapperMLP=None):
+        '''
+        Args:
+            x: sampled points [B, 3]
+            styles: shape and color code [B, dim_style]
+            maskMLP (optional): Masknet Network. Computes point-wise mask factor if it's not None 
+            mask (optional): point-wise mask from maskMLP in previous iterations. 
+        '''
+        clipeditmode = maskMLP != None
+        if clipeditmode: clipmaskfeat = []
         input_pts, input_views = torch.split(x, [self.input_ch, self.input_ch_views], dim=-1)
 
         if self.separate_codes:
             styles_sigma, styles_rgb = styles[:, :self.style_dim], styles[:, self.style_dim:]
         else:
             styles_sigma, styles_rgb = styles, styles
+    
+        if mask is not None and mapperMLP is not None:
+            delta_styles_sigma, delta_styles_rgb = mapperMLP(styles)
+            #styles_sigma = styles_sigma + mask * delta_styles_sigma
+            #styles_rgb = styles_rgb + mask * delta_styles_rgb
+
 
         if alpha is None:
             # Have to compute sigma
@@ -114,7 +131,11 @@ class NeRF(nn.Module):
 
             h = self.activation(h)
             fusion_output = self.fusion_network(h)
+            if clipeditmode: clipmaskfeat.append(fusion_output)
+            if mask is not None:
+                fusion_output = 
             alpha = self.sigma_linear(fusion_output)
+            if clipeditmode: clipmaskfeat.append(alpha)
             color_feature = self.bottleneck_linear(fusion_output)
         else:
             color_feature = feature
@@ -125,7 +146,9 @@ class NeRF(nn.Module):
                 h = torch.cat([color_feature, input_views, style_embedding], -1)
             else:
                 h = torch.cat([color_feature, input_views], -1)
-            rgb = self.rgb_linear(self.rgb_network(h))
+            h = self.rgb_network(h)
+            if clipeditmode: clipmaskfeat.append(h)
+            rgb = self.rgb_linear(h)
             if self.get_cached:
                 if self.get_cached == 'color':
                     outputs = torch.cat([rgb, alpha, color_feature], -1)
@@ -137,7 +160,11 @@ class NeRF(nn.Module):
                 outputs = torch.cat([rgb, alpha], -1)
         else:
             outputs = self.output_linear(h)
-        return outputs
+        if clipeditmode:
+            mask = maskMLP(torch.cat(clipmaskfeat, -1))
+            return outputs, mask        
+        else:
+            return outputs
 
     def color_branch(self):
         return list(self.rgb_linear.parameters()) + list(self.rgb_network.parameters()) + list(self.style_linears[2].parameters()) + list(self.bottleneck_linear.parameters())

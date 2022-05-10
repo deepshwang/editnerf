@@ -1,6 +1,6 @@
-from torchsearchsorted import searchsorted
 import numpy as np
 import torch
+import ipdb
 torch.autograd.set_detect_anomaly(True)
 
 TEST = False
@@ -33,7 +33,7 @@ def to_disp_img(disp):
 # Ray helpers
 
 
-def get_rays(H, W, focal, c2w):
+def get_rays(H, W, focal, c2w, ds_ratio=None):
     i, j = torch.meshgrid(torch.linspace(0, W - 1, W), torch.linspace(0, H - 1, H))  # pytorch's meshgrid has indexing='ij'
     i = i.t()
     j = j.t()
@@ -45,11 +45,15 @@ def get_rays(H, W, focal, c2w):
         # inside [-200, 200] (400/2), we only want to render from [-128/200, 128/200]
         wfactor *= (200. / 128.)
         hfactor *= (200. / 128.)
-    dirs = torch.stack([(i - W * .5) / wfactor, -(j - H * .5) / hfactor, -torch.ones_like(i)], -1)
+    dirs = torch.stack([(i - W * .5) / wfactor, -(j - H * .5) / hfactor, -torch.ones_like(i)], -1).cuda()
     # Rotate ray directions from camera frame to the world frame
     rays_d = torch.sum(dirs[..., np.newaxis, :] * c2w[:3, :3], -1)  # dot product, equals to: [c2w.dot(dir) for dir in dirs]
     # Translate camera frame's origin to the world frame. It is the origin of all rays.
     rays_o = c2w[:3, -1].expand(rays_d.shape)
+    if ds_ratio is not None:
+        ds_idx_h = list(range(0, H, ds_ratio))
+        ds_idx_w = list(range(0, W, ds_ratio))
+        return rays_o[ds_idx_h, ds_idx_w, :], rays_d[ds_idx_h, ds_idx_w, :]
     return rays_o, rays_d
 
 # Hierarchical sampling (section 5.2)
@@ -79,10 +83,11 @@ def sample_pdf(bins, weights, N_samples, det=False, pytest=False):
         else:
             u = np.random.rand(*new_shape)
         u = torch.Tensor(u)
+    u = u.cuda()
 
     # Invert CDF
     u = u.contiguous()
-    inds = searchsorted(cdf, u, side='right')
+    inds = torch.searchsorted(cdf, u, right=True, side='right')
     below = torch.max(torch.zeros_like(inds - 1), inds - 1)
     above = torch.min((cdf.shape[-1] - 1) * torch.ones_like(inds), inds)
     inds_g = torch.stack([below, above], -1)  # (batch, N_samples, 2)

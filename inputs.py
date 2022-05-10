@@ -1,11 +1,13 @@
 def config_parser():
     import configargparse
     parser = configargparse.ArgumentParser()
-    parser.add_argument('--config', is_config_file=True, help='config file path')
+    parser.add_argument('--config', default='model/cnerf/configs/photoshapes/config.txt', is_config_file=True, help='config file path')
+    parser.add_argument('--config-path', default='config', help='pseudo config file path for localnerf')
+ 
     parser.add_argument("-f", type=str, help='ipynb hack')
     parser.add_argument("--expname", type=str, help='experiment name')
     parser.add_argument("--savedir", type=str, default=None, help='where to save, overrides expname')
-    parser.add_argument("--basedir", type=str, default='./logs/', help='where to store ckpts and logs')
+    parser.add_argument("--basedir", type=str, default='model/cnerf/logs/', help='where to store ckpts and logs')
     parser.add_argument("--datadir", type=str, default='./data/', help='input data directory')
     parser.add_argument("--real_image_dir", type=str, default=None, help='directory containing real images')
 
@@ -67,6 +69,8 @@ def config_parser():
     parser.add_argument("--skip_loading", action='store_true', help='skip loading the model from last checkpoint')
     parser.add_argument("--testskip", type=int, default=8, help='will load 1/N images from test/val sets')
     parser.add_argument("--trainskip", type=int, default=1, help='will load 1/N images from train sets')
+    parser.add_argument("--ds_ratio", type=int, default=1, help='will load images with resize ratio of 1/ds_ratio')
+
 
     # visualization options
     parser.add_argument("--shuffle_poses", action='store_true', help='shuffle test set poses')
@@ -81,6 +85,7 @@ def config_parser():
     # blender flags
     parser.add_argument("--white_bkgd", action='store_true',
                         help='set to render synthetic data on a white bkgd (always use for dvoxels)')
+
 
     # logging/saving options
     parser.add_argument("--i_print",   type=int, default=100,

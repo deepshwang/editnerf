@@ -3,10 +3,10 @@ import torch
 import os
 from torch import nn
 
-from load_blender import load_chairs
-from run_nerf_helpers import get_rays, img2mse
-from rendering import render
-from utils import LBFGS
+from .load_blender import load_chairs
+from .run_nerf_helpers import get_rays, img2mse
+from .rendering import render
+from .utils import LBFGS
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 np.random.seed(0)
@@ -147,6 +147,7 @@ class NerfDataset():
             coords = torch.stack(torch.meshgrid(
                 torch.linspace(starth, endh, nbinsh),
                 torch.linspace(startw, endw, nbinsw)), -1).long()
+            
             coords = torch.reshape(coords, [-1, 2])  # (H * W, 2)
 
             select_inds = np.random.choice(coords.shape[0], size=[self.N_rand], replace=False)  # (N_rand,)
@@ -162,12 +163,12 @@ class NerfDataset():
         return batch_rays, target_s, style, H, W, focal, near, far, viewdirs_reg
 
 
-def load_data(args):
+def load_data(args, instance_idx=None, verbose=True):
     print('Loading data')
-    images, poses, hwfs, i_split, style_inds = load_chairs(args.datadir, args)
+    images, poses, hwfs, i_split, style_inds = load_chairs(args.datadir, args, instance_idx=instance_idx, verbose=verbose)
     i_train, i_val, i_test = i_split
 
-    near = args.blender_near
+    near = args.blender_near 
     far = args.blender_far
 
     near_fars = torch.zeros((images.shape[0], 2))

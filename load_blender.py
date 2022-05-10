@@ -6,6 +6,9 @@ import numpy as np
 import imageio
 import torchvision
 
+from tqdm import tqdm
+import ipdb
+import cv2
 
 def trans_t(t): return torch.Tensor([
     [1, 0, 0, 0],
@@ -36,7 +39,7 @@ def pose_spherical(theta, phi, radius):
     return c2w
 
 
-def load_blender_data(basedir, trainskip=1, testskip=1, skip_val_test=False):
+def load_blender_data(basedir, trainskip=1, testskip=1, skip_val_test=False, ds_ratio=1):
     splits = ['train', 'val', 'test']
     metas = {}
     for s in splits:
@@ -64,6 +67,9 @@ def load_blender_data(basedir, trainskip=1, testskip=1, skip_val_test=False):
                 imgs.append(np.zeros(all_imgs[-1][-1].shape))
             else:
                 imgs.append(imageio.imread(fname, ignoregamma=True, pilmode='RGB'))
+            if ds_ratio != 1:
+                H, W = imgs[-1].shape[:2]
+                imgs[-1] = cv2.resize(imgs[-1], dsize=(H//ds_ratio, W//ds_ratio))
             poses.append(np.array(frame['transform_matrix']))
 
         imgs = (np.array(imgs) / 255.).astype(np.float32)
@@ -82,12 +88,12 @@ def load_blender_data(basedir, trainskip=1, testskip=1, skip_val_test=False):
         camera_angle_x = float(meta['camera_angle_x'])
         focal = .5 * W / np.tan(.5 * camera_angle_x)
     else:
-        focal = meta['focal']
+        focal = meta['focal'] / ds_ratio
 
     return imgs, poses, [H, W, focal], i_split
 
 
-def load_chairs(basedir, args):
+def load_chairs(basedir, args, instance_idx=None, verbose=True):
     all_imgs = []
     all_poses = []
     all_i_split = [[], [], []]
@@ -103,10 +109,11 @@ def load_chairs(basedir, args):
             instances = [x.strip() for x in f.readlines()]
             instance_names = [os.path.join(basedir, instance_name) for instance_name in instances]
             if args.instance >= 0:
-                instance_names = [instance_names[args.instance]]
-
-    for instance in instance_names:
-        imgs, poses, hwf, i_split = load_blender_data(instance, args.trainskip, args.testskip, skip_val_test=args.real_image_dir)
+               instance_names = [instance_names[args.instance]]
+    if instance_idx is not None: instance_names = [instance_names[instance_idx]]
+    iterator = tqdm(instance_names, desc="Loading instances") if verbose else instance_names
+    for instance in iterator:
+        imgs, poses, hwf, i_split = load_blender_data(instance, args.trainskip, args.testskip, skip_val_test=args.real_image_dir, ds_ratio=args.ds_ratio)
         hwfs += [hwf for _ in range(imgs.shape[0])]
         N_train, N_val, N_test = [len(x) for x in i_split]
         train, val, test = imgs[:N_train], imgs[N_train:N_train + N_val], imgs[N_train + N_val:N_train + N_val + N_test]

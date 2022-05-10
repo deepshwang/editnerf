@@ -4,11 +4,17 @@ import numpy as np
 from tqdm import tqdm
 from torchvision import transforms, utils
 from PIL import Image
+import sys
+import ipdb
 
+
+args = sys.argv[1:]
+basedir = args[0]
+todir = args[0]
 N = 10000
-basedir = 'data/carla'
+#basedir = 'data/carla'
+#todir = 'data/carla'
 trn = transforms.Compose([transforms.Resize(256), transforms.ToTensor()])
-todir = 'data/carla'
 
 
 def listify_matrix(matrix):

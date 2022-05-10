@@ -1,38 +1,41 @@
 # Download rendered PhotoShapes chairs dataset.
-mkdir -p data/photoshapes
-cd data/photoshapes
+DATA_ROOT=/home/nas2_userF/sungwonhwang/ws/data
+PROJ_ROOT=/home/nas2_userF/sungwonhwang/ws/LocalNeRF/model/cnerf
 
-wget editnerf.csail.mit.edu/photoshapes.zip
-echo 'Unzipping photoshapes dataset'
-unzip -q photoshapes.zip
-mv photoshapes/* .
+#mkdir -p ${DATA_ROOT}/photoshapes
+#cd ${DATA_ROOT}/photoshapes
 
-cd ../../
+#wget editnerf.csail.mit.edu/photoshapes.zip
+#echo 'Unzipping photoshapes dataset'
+#unzip -q photoshapes.zip
+#mv photoshapes/* .
+
+#cd ../../
 
 # Download and process rendered CARLA cars dataset.
-mkdir -p data/carla/carla_images
-cd data/carla/carla_images
+#mkdir -p ${DATA_ROOT}/carla/carla_images
+#cd ${DATA_ROOT}/carla/carla_images
 
-wget https://s3.eu-central-1.amazonaws.com/avg-projects/graf/data/carla.zip
-echo 'Unzipping CARLA dataset'
-unzip -q carla.zip
+#wget https://s3.eu-central-1.amazonaws.com/avg-projects/graf/data/carla.zip
+#echo 'Unzipping CARLA dataset'
+#unzip -q carla.zip
 
-cd ..
-wget https://s3.eu-central-1.amazonaws.com/avg-projects/graf/data/carla_poses.zip
-unzip -q carla_poses.zip
+#cd ..
+#wget https://s3.eu-central-1.amazonaws.com/avg-projects/graf/data/carla_poses.zip
+#unzip -q carla_poses.zip
 
-cd ../../
-echo 'Formatting CARLA dataset'
-python utils/setup_cars.py
+#cd ../../
+#echo 'Formatting CARLA dataset'
+python ${PROJ_ROOT}/utils/setup_cars.py ${DATA_ROOT}/carla
 
-# Download and process rendered Dosovitskiy chairs dataset. 
-mkdir -p data/dosovitskiy_chairs/
-cd data/dosovitskiy_chairs
+# Download and process rendered Dosovitskiy chairs dataset.
+#mkdir -p ${DATA_ROOT}/dosovitskiy_chairs/
+#cd ${DATA_ROOT}/dosovitskiy_chairs
 
-wget https://www.di.ens.fr/willow/research/seeing3Dchairs/data/rendered_chairs.tar
-echo 'Unzipping Dosovitskiy chairs dataset'
-tar -xf rendered_chairs.tar
-cd ../../
+#wget https://www.di.ens.fr/willow/research/seeing3Dchairs/data/rendered_chairs.tar
+#echo 'Unzipping Dosovitskiy chairs dataset'
+#tar -xf rendered_chairs.tar
+#cd ../../
 
 echo 'Formatting Dosovitskiy chairs dataset'
-python utils/setup_dosovitskiy.py
+python ${PROJ_ROOT}/utils/setup_dosovitskiy.py ${DATA_ROOT}/dosovitskiy_chairs

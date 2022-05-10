@@ -1,5 +1,5 @@
-from models.base_model import NeRF
-from models.embedders import get_embedder
+from .models.base_model import NeRF
+from .models.embedders import get_embedder
 import torch
 import os
 
@@ -14,19 +14,30 @@ def batchify(fn, chunk):
     if chunk is None:
         return fn
 
-    def ret(inputs, styles, alpha, feature):
+    def ret(inputs, styles, alpha, feature, maskMLP=None, mask=None, mapperMLP=None):
         results = []
+        masks = []
         for i in range(0, inputs.shape[0], chunk):
             input_chunk = inputs[i:i + chunk]
             style_chunk = styles[i:i + chunk]
             alpha_chunk = alpha[i:i + chunk] if alpha is not None else None
             feature_chunk = feature[i:i + chunk] if feature is not None else None
-            results.append(fn(input_chunk, style_chunk, alpha_chunk, feature_chunk))
-        return torch.cat(results, 0)
+            mask = mask[i:i + chunk] if mask is not None else None
+            if maskMLP is None:
+                results.append(fn(input_chunk, style_chunk, alpha=alpha_chunk, feature=feature_chunk, maskMLP=maskMLP, mask=mask, mapperMLP=mapperMLP))
+            else:
+                result, mask = fn(input_chunk, style_chunk, alpha=alpha_chunk, feature=feature_chunk, maskMLP=maskMLP)
+                results.append(result)
+                masks.append(mask)
+                #return torch.cat(results, 0)
+        if maskMLP is None:
+            return torch.cat(results, 0)
+        else:
+            return torch.cat(results, 0), torch.cat(masks, 0)
     return ret
 
 
-def run_network(inputs, styles, viewdirs, fn, alpha, feature, embed_fn, embeddirs_fn, netchunk=1024 * 64):
+def run_network(inputs, styles, viewdirs, fn, alpha, feature, embed_fn, embeddirs_fn, netchunk=1024 * 64, maskMLP=None, mask=None, mapperMLP=None):
     """Prepares inputs and applies network 'fn'.
     """
     inputs_flat = torch.reshape(inputs, [-1, inputs.shape[-1]])
@@ -40,10 +51,17 @@ def run_network(inputs, styles, viewdirs, fn, alpha, feature, embed_fn, embeddir
         alpha = torch.reshape(alpha, [-1, 1])
     if feature is not None:
         feature = torch.reshape(feature, [-1, feature.shape[-1]])
-    outputs_flat = batchify(fn, netchunk)(embedded, styles, alpha, feature)
-    outputs = torch.reshape(outputs_flat, list(inputs.shape[:-1]) + [outputs_flat.shape[-1]])
-    return outputs
-
+    if maskMLP is None:
+        if mask is not None: 
+            mask = torch.unsqueeze(torch.flatten(mask), -1)
+        outputs_flat = batchify(fn, netchunk)(embedded, styles, alpha, feature, maskMLP=maskMLP, mask=mask, mapperMLP=mapperMLP)
+        outputs = torch.reshape(outputs_flat, list(inputs.shape[:-1]) + [outputs_flat.shape[-1]])
+        return outputs
+    else:
+        outputs_flat, mask_outputs_flat = batchify(fn, netchunk)(embedded, styles, alpha, feature, maskMLP=maskMLP)
+        outputs = torch.reshape(outputs_flat, list(inputs.shape[:-1]) + [outputs_flat.shape[-1]])
+        mask_outputs = torch.reshape(mask_outputs_flat, list(inputs.shape[:-1]) + [mask_outputs_flat.shape[-1]])
+        return outputs, torch.squeeze(mask_outputs)
 
 def load_checkpoint(chkpt_dir, args):
     ckpts = [os.path.join(chkpt_dir, f) for f in sorted(os.listdir(chkpt_dir)) if 'tar' in f]
@@ -87,10 +105,13 @@ def create_nerf(args, return_styles=False):
                           D_rgb=args.D_rgb, W_rgb=args.W_rgb, W_bottleneck=args.W_bottleneck, input_ch=input_ch, output_ch=output_ch, input_ch_views=input_ch_views, style_dim=style_dim, embed_dim=args.embed_dim, style_depth=args.style_depth, shared_shape=args.shared_shape, use_viewdirs=args.use_viewdirs, separate_codes=args.separate_codes, use_styles=args.use_styles).to(device)
         grad_vars += list(model_fine.parameters())
 
-    def network_query_fn(inputs, styles, viewdirs, network_fn, alpha, feature): return run_network(inputs, styles, viewdirs, network_fn, alpha, feature,
+    def network_query_fn(inputs, styles, viewdirs, network_fn, alpha, feature, maskMLP=None, mask=None, mapperMLP=None): return run_network(inputs, styles, viewdirs, network_fn, alpha, feature,
                                                                                                    embed_fn=embed_fn,
                                                                                                    embeddirs_fn=embeddirs_fn,
-                                                                                                   netchunk=args.netchunk)
+                                                                                                   netchunk=args.netchunk,
+                                                                                                   maskMLP=maskMLP,
+                                                                                                   mask=mask,
+                                                                                                   mapperMLP=mapperMLP)
 
     # Create optimizer
     optimizer = torch.optim.Adam(params=grad_vars, lr=args.lrate, betas=(0.9, 0.999))
@@ -137,6 +158,6 @@ def create_nerf(args, return_styles=False):
     render_kwargs_test['raw_noise_std'] = 0.
 
     if return_styles:
-        return render_kwargs_train, render_kwargs_test, start, grad_vars, optimizer, ckpt['styles']
+        return render_kwargs_train, render_kwargs_test, start, grad_vars, optimizer, ckpt['styles'][:args.N_instances]
 
     return render_kwargs_train, render_kwargs_test, start, grad_vars, optimizer
