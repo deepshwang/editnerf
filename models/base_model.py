@@ -133,7 +133,7 @@ class NeRF(nn.Module):
             fusion_output = self.fusion_network(h)
             if clipeditmode: clipmaskfeat.append(fusion_output)
             if mask is not None:
-                fusion_output = 
+                fusion_output = mask * fusion_output
             alpha = self.sigma_linear(fusion_output)
             if clipeditmode: clipmaskfeat.append(alpha)
             color_feature = self.bottleneck_linear(fusion_output)
